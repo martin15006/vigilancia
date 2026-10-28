@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicio</title>
+    <link rel="stylesheet" href="/inicio.css">
+    <script src="/sesion.js" defer></script>
+</head>
+
+<body>
+    <main class="entrada">
+        <p>Hola: <%= nombre %>
+        </p>
+
+        <% if (pantalla==="avisos" ){ %>
+            <h1>Enviar aviso</h1>
+            <p>Aquí irá el formulario del aviso</p>
+            <% } else if (pantalla==="resumen" ){ %>
+                <h1>Resumen</h1>
+                <p>Resumen de los casos</p>
+                <% } %>
+
+                    <form action="/cerrar-sesion" method="post">
+                        <button type="submit">Cerrar sesión</button>
+                    </form>
+    </main>
+</body>
+
+</html>

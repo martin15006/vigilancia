@@ -1,0 +1,42 @@
+* {
+    box-sizing: border-box;
+}
+
+h1{
+    text-align: center;
+}
+
+
+
+.entrada {
+    display: grid;
+    place-items: center;
+    background: #2ee7b9;
+    max-width: 24rem;
+    margin: 0 auto;
+    padding: 2rem;
+    border-radius: 25px;
+}
+
+.entrada form {
+    display: grid;
+    gap:0.5rem
+}
+
+.entrada input,
+.entrada button{
+    min-height: 44px;
+    width: 100%;
+    font-size: large;
+}
+
+button{
+    border-radius: 25px;
+}
+
+.mensaje-error{
+    margin: 0 0 0 0.5rem;
+    color: #b00020;
+}
+
+
