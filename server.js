@@ -54,13 +54,17 @@ async function requiereSesion(req, res, next) {
 
 
 app.get("/salud", async (req, res) => {
-    const { error } = await clienteAdmin().auth.admin.listUsers({ page: 1, perPage: 1 });
-    if (error) {
-        console.error("Supabase no Responde: ", error.message);
-        return res.status(503).json({ ok: false });
+    try {
+        const respuesta = await fetch(`${process.env.SUPABASE_URL}/auth/v1/health`, {
+            headers: { apikey: process.env.SUPABASE_PUBLISHABLE_KEY },
+        });
+        if (!respuesta.ok) throw new Error(`Supabase respondió: ${respuesta.status}`);
+        res.json({ ok: true });
+    } catch (error) {
+        console.error("Supabase no responde:", error.message);
+        res.status(503).json({ ok: false })
     }
-    res.json({ ok: true });
-})
+});
 
 app.get("/login", (req, res) => {
     res.render("login", { mensaje: null, correo: "" })

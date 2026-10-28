@@ -1,4 +1,13 @@
+# Llaves y secretos
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Librerías: se reinstalan con npm install
 /node_modules
+
+# Herramientas locales
 .remember
 .impeccable/
