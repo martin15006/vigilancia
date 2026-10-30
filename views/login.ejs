@@ -12,6 +12,7 @@
     <main class="entrada">
         <h1>Vigilancia ISO</h1>
         <form method="post" action="/login">
+            <input type="hidden" name="_csrf" value="<%= csrf %>">
             <%if(mensaje) {%>
                 <p class="mensaje-error" role="alert">
                     <%= mensaje %>

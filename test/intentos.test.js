@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { crearRegistro, estaFrenado, anotarFallo, anotarExito } = require("../lib/intentos");
+const { crearRegistro, estaFrenado, anotarFallo, anotarExito, empezarIntento, terminarIntento } = require("../lib/intentos");
 
 const MINUTO = 60 * 1000;
 const EQUIPO = "10.0.0.5";
@@ -65,3 +65,33 @@ test("CB-20 · los registros viejos se borran para no llenar la memoria", () => 
     assert.equal(registro.size, 2);
 });
 
+test("CB-20 · con 4 intentos esperando respuesta, el quinto todavía puede intentar", () => {
+    const registro = crearRegistro();
+    for (let i = 0; i < 4; i++) empezarIntento(registro, EQUIPO, CORREO, 0);
+    assert.equal(estaFrenado(registro, EQUIPO, CORREO, 0), false);
+});
+
+test("CB-20 · si 5 intentos empiezan a la vez, el sexto queda frenado aunque ninguno haya terminado", () => {
+    const registro = crearRegistro();
+    for (let i = 0; i < 5; i++) empezarIntento(registro, EQUIPO, CORREO, 0);
+    assert.equal(estaFrenado(registro, EQUIPO, CORREO, 0), true);
+});
+
+test("CB-20 · al terminar, los intentos se sueltan y solo los fallidos se anotan", () => {
+    const registro = crearRegistro();
+    for (let i = 0; i < 5; i++) empezarIntento(registro, EQUIPO, CORREO, 0);
+    for (let i = 0; i < 4; i++) terminarIntento(registro, EQUIPO, CORREO, 0, true);
+    terminarIntento(registro, EQUIPO, CORREO, 0, false);
+    assert.equal(estaFrenado(registro, EQUIPO, CORREO, 0), false);
+    empezarIntento(registro, EQUIPO, CORREO, 0);
+    terminarIntento(registro, EQUIPO, CORREO, 0, true);
+    assert.equal(estaFrenado(registro, EQUIPO, CORREO, 0), true);
+});
+
+test("CB-20 · la limpieza de memoria no borra intentos que esperan respuesta", () => {
+    const registro = crearRegistro();
+    for (let i = 0; i < 5; i++) empezarIntento(registro, EQUIPO, CORREO, 0);
+    for (let i = 0; i < 600; i++) anotarFallo(registro, `10.1.${i}.1`, "x@prueba.test", 0);
+    anotarFallo(registro, "10.9.9.9", "y@prueba.test", 16 * MINUTO);
+    assert.equal(estaFrenado(registro, EQUIPO, CORREO, 16 * MINUTO), true);
+});

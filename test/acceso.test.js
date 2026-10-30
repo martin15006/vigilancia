@@ -53,3 +53,13 @@ test("CB-19 · Si supabase falla no culpa a nadie", () => {
 test("CB-20 · El mensaje de freno dice cuanto tiempo esperar", () => {
     assert.equal(MENSAJES.demasiados, "Demasiados intentos fallidos. Espere 15 minutos e intente de nuevo.");
 })
+
+test("base · textos en la pagina de error", () => {
+    assert.equal(MENSAJES.noEncontrada, "No se encontró esta página.");
+    assert.equal(MENSAJES.inesperado, "Ocurrió un error inesperado. Intente de nuevo en un momento.");
+    assert.equal(MENSAJES.vencido, "El formulario venció. Recargue la página e intente de nuevo.");
+})
+
+test("RNF-09 · el aviso de inactividad", () => {
+    assert.equal(MENSAJES.inactividad, "Su sesión se cerró después de 15 minutos sin uso. Vuelva a entrar.");
+});
