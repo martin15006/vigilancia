@@ -5,6 +5,9 @@
 *.pem
 *.key
 
+# Documentos del proyecto (SRS, pacto, diario, diseño): no se suben, el repositorio es público
+/docs/
+
 # Librerías: se reinstalan con npm install
 /node_modules
 

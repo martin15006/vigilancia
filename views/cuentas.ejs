@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuentas · Vigilancia ISO</title>
+    <link rel="stylesheet" href="/public/cuentas.css">
+    <script src="/sesion.js" defer></script>
+</head>
+
+<body>
+    <main class="cuentas">
+        <a href="/inicio">Volver al inicio</a>
+        <h1>Cuentas</h1>
+
+        <% if (aviso) { %>
+        <p class="aviso" role="status">
+            <%= aviso %>
+        </p>
+        <% } %>
+        <% if (errores.general) { %>
+        <p class="error" role="alert">
+            <%= errores.general %>
+        </p>
+        <% } %>
+        <section>
+            <h2>Crear cuenta</h2>
+            <form method="post" action="/cuentas">
+                <input type="hidden" name="_csrf" value="<%= csrf %>">
+
+                <label for="nombre">Nombre</label>
+                <input id="nombre" name="nombre" value="<%= valores.nombre %>" required>
+                <% if (errores.nombre) { %>
+                <p class="error">
+                    <%= errores.nombre %>
+                </p>
+                <% } %>
+
+                <label for="correo">Correo</label>
+                <input id="correo" name="correo" type="email" value="<%= valores.correo %>" required>
+
+                <% if (errores.correo) { %>
+                <p class="error">
+                    <%= errores.correo %>
+                </p>
+                <% } %>
+
+                <label for="perfil">Perfil</label>
+                <select id="perfil" name="perfil" required>
+                    <option value="">Elija un perfil</option>
+                    <% perfiles.forEach((perfil)=>{ %>
+                    <option value="<%= perfil.id %>" <% if (String(perfil.id) === valores.perfil) { %> selected<% } %>>
+                        <%= perfil.nombre %>
+                    </option> <% }) %>
+                </select>
+                <% if (errores.perfil) {%>
+                <p class="error">
+                    <%= errores.perfil %>
+                </p>
+                <% } %>
+
+                <fieldset>
+                    <legend>Tipo de acceso</legend>
+                    <label><input type="radio" name="acceso" value="usuario" <%
+                                                                    if (valores.acceso !=="administrador" ){ %> checked
+                            <% } %>>Usuario
+                    </label>
+                    <label><input type="radio" name="acceso" value="administrador" <% if
+                                                                    (valores.acceso==="administrador" ) { %> checked <%
+                                                                    } %>>
+                        Administrador</label>
+                </fieldset>
+                <% if (errores.acceso) { %>
+                <p class="error">
+                    <%= errores.acceso %>
+                </p>
+                <% } %>
+
+                <button type="submit">Crear cuenta</button>
+            </form>
+        </section>
+        <section>
+            <h2>Cuentas del sistema</h2>
+            <div class="tabla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Correo</th>
+                            <th>Perfil</th>
+                            <th>Tipo de acceso</th>
+                            <th>Estado</th>
+                            <th>Editar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% cuentas.forEach((cuenta)=> { %>
+                        <tr>
+                            <td>
+                                <%= cuenta.nombre %>
+                            </td>
+                            <td>
+                                <%= cuenta.correo %>
+                            </td>
+                            <td>
+                                <%= cuenta.perfiles?.nombre %>
+                            </td>
+                            <td>
+                                <%= cuenta.es_admin ? "Administrador" : "Usuario" %>
+                            </td>
+                            <td>
+                                <%= cuenta.activa? "Activa" : "Desactivada" %>
+                            </td>
+                            <td><a href="/cuentas/<%= cuenta.id %>">Editar</a></td>
+                        </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</body>
+
+</html>

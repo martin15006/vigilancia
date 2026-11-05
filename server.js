@@ -9,6 +9,7 @@ const { cabecerasSeguras } = require("./lib/seguridad");
 const { parseCookieHeader, serializeCookieHeader } = require("@supabase/ssr");
 const { crearToken, leerToken, tokenValido } = require("./lib/csrf");
 const { crearMarca, sigueActiva } = require("./lib/inactividad");
+const { requiereAdmin, revisarDatosCuenta, generarClaveTemporal, mensajeAlCrear, textoCuentaCreada, valoresDelFormulario } = require("./lib/cuentas");
 
 const CLAVE_FIRMA = process.env.CLAVE_FIRMA;
 if (!CLAVE_FIRMA || CLAVE_FIRMA.length < 32) {
@@ -86,7 +87,7 @@ async function requiereSesion(req, res, next) {
 
     const { data: cuenta, error: errorCuenta } = await supabase
         .from("cuentas")
-        .select("nombre, activa, perfiles (enviar_avisos, ver_casos)")
+        .select("nombre, activa, es_admin, perfiles (enviar_avisos, ver_casos)")
         .eq("id", data.user.id)
         .maybeSingle();
     if (errorCuenta) {
@@ -128,7 +129,7 @@ app.get("/login", (req, res) => {
 app.get("/", (req, res) => res.redirect(303, "/inicio"));
 
 app.get("/inicio", requiereSesion, (req, res) => {
-    res.render("inicio", { nombre: req.cuenta.nombre, pantalla: pantallaDeInicio(req.cuenta.perfiles) });
+    res.render("inicio", { nombre: req.cuenta.nombre, pantalla: pantallaDeInicio(req.cuenta.perfiles), esAdmin: req.cuenta.es_admin === true });
 });
 
 app.post("/login", async (req, res) => {
@@ -140,10 +141,12 @@ app.post("/login", async (req, res) => {
     if (faltaAlgo) return volver(400, faltaAlgo);
 
     const equipo = req.ip;
-    if (estaFrenado(intentos, equipo, correoLimpio, Date.now())) return volver(429, MENSAJES.demasiados);
+    const ahora = Date.now();
+    if (estaFrenado(intentos, equipo, correoLimpio, ahora) || !empezarIntento(intentos, equipo, correoLimpio, ahora)) {
+        return volver(429, MENSAJES.demasiados);
+    }
 
     const supabase = clientePorPeticion(req, res);
-    empezarIntento(intentos, equipo, correoLimpio, Date.now());
     let respuesta;
     try {
         respuesta = await supabase.auth.signInWithPassword({ email: correoLimpio, password: contraseña });
@@ -184,6 +187,54 @@ app.post("/cerrar-sesion", async (req, res) => {
     await supabase.auth.signOut({ scope: "local" });
     borrarMarca(res);
     res.redirect(303, "/login");
+});
+
+async function leerCuentas() {
+    const admin = clienteAdmin();
+    const [perfiles, cuentas] = await Promise.all([
+        admin.from("perfiles").select("id, nombre").order("id"),
+        admin.from("cuentas").select("id, nombre, correo, es_admin, activa, perfiles(nombre)").order("nombre"),
+    ]);
+    const error = perfiles.error ?? cuentas.error;
+    if (error) throw new Error(`No se pudieron leer las cuentas: ${error.message}`);
+    return { perfiles: perfiles.data, cuentas: cuentas.data };
+}
+app.get("/cuentas", requiereSesion, requiereAdmin, async (req, res) => {
+    res.render("cuentas", { ...(await leerCuentas()), errores: {}, valores: valoresDelFormulario(), aviso: null });
+});
+
+app.post("/cuentas", requiereSesion, requiereAdmin, async (req, res) => {
+    const lista = await leerCuentas();
+    const volver = (estado, extra) => res.status(estado).render("cuentas", {
+        ...lista, errores: {}, valores: valoresDelFormulario(req.body), aviso: null, ...extra,
+    });
+
+    const volverPorError = (fallo) => {
+        const mensaje = mensajeAlCrear(fallo);
+        if (mensaje === MENSAJES.correoRepetido) return volver(409, { errores: { correo: mensaje } });
+        console.error("No se pudo crear la cuenta: ", fallo.code, fallo.message);
+        return volver(503, { errores: { general: mensaje } });
+
+    }
+    const { errores, datos } = revisarDatosCuenta(req.body, lista.perfiles.map((perfil) => perfil.id));
+    if (Object.keys(errores).length > 0) return volver(400, { errores });
+
+    // la contraseña no se guarda ni se muestra en la terminal
+    const clave = generarClaveTemporal();
+    const admin = clienteAdmin();
+    const { data, error } = await admin.auth.admin.createUser({ email: datos.correo, password: clave, email_confirm: true });
+    if (error) return volverPorError(error);
+
+    const { error: errorFila } = await admin.from("cuentas").insert({ id: data.user.id, ...datos, debe_cambiar: true });
+    if (errorFila) {
+        const { error: errorBorrar } = await admin.auth.admin.deleteUser(data.user.id);
+        if (errorBorrar) console.error("Quedó un usuario sin cuenta:", data.user.id, errorBorrar.message);
+        return volverPorError(errorFila);
+    }
+
+    res.status(201).render("cuentas", {
+        ...(await leerCuentas()), errores: {}, valores: valoresDelFormulario(), aviso: textoCuentaCreada(clave),
+    });
 });
 
 app.use((req, res) => {

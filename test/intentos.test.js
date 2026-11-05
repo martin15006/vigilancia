@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { crearRegistro, estaFrenado, anotarFallo, anotarExito, empezarIntento, terminarIntento } = require("../lib/intentos");
+const { crearRegistro, estaFrenado, anotarFallo, anotarExito, empezarIntento, terminarIntento, TOPE_DURO } = require("../lib/intentos");
 
 const MINUTO = 60 * 1000;
 const EQUIPO = "10.0.0.5";
@@ -8,7 +8,11 @@ const CORREO = "valen@prueba.test";
 
 function fallar(registro, veces, ahora) {
     for (let i = 0; i < veces; i++) anotarFallo(registro, EQUIPO, CORREO, ahora);
-}
+};
+
+function llenar(registro, cuantas, ahora) {
+    for (let i = 0; i < cuantas; i++) registro.set(`relleno:${i}`, { fallos: 0, enCurso: 1, desde: ahora, frenadoHasta: 0 });
+};
 
 test("CB-20 · con 4 fallos seguidos el correo todavía puede intentar", () => {
     const registro = crearRegistro();
@@ -94,4 +98,26 @@ test("CB-20 · la limpieza de memoria no borra intentos que esperan respuesta", 
     for (let i = 0; i < 600; i++) anotarFallo(registro, `10.1.${i}.1`, "x@prueba.test", 0);
     anotarFallo(registro, "10.9.9.9", "y@prueba.test", 16 * MINUTO);
     assert.equal(estaFrenado(registro, EQUIPO, CORREO, 16 * MINUTO), true);
+});
+
+test("CB-20 · con la libreta llena, un correo no puede empezar", () => {
+    const registro = crearRegistro();
+    llenar(registro, TOPE_DURO, 0);
+    assert.equal(empezarIntento(registro, EQUIPO, CORREO, 0), false);
+    assert.equal(registro.size, TOPE_DURO);
+});
+
+test("CB-20 · con espacio justo para sus dos filas, todavía puede empezar", () => {
+    const registro = crearRegistro();
+    llenar(registro, TOPE_DURO - 2, 0);
+    assert.equal(empezarIntento(registro, EQUIPO, CORREO, 0), true);
+    assert.equal(registro.size, TOPE_DURO);
+});
+
+test("CB-20 · con la libreta llena, quien ya estaba anotado sigue pudiento intentar", () => {
+    const registro = crearRegistro();
+    empezarIntento(registro, EQUIPO, CORREO, 0);
+    terminarIntento(registro, EQUIPO, CORREO, 0), true;
+    llenar(registro, TOPE_DURO - 2, 0);
+    assert.equal(empezarIntento(registro, EQUIPO, CORREO, 0), true);
 });

@@ -1,0 +1,4 @@
+{
+    // Los .ejs se abren como HTML. Con esto el formateador (Alt+Shift+F) entiende <% %> y no los deja en escalera.
+    "html.format.templating": true
+}

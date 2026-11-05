@@ -14,18 +14,21 @@
         <p>Hola: <%= nombre %>
         </p>
 
-        <% if (pantalla==="avisos" ){ %>
-            <h1>Enviar aviso</h1>
-            <p>Aquí irá el formulario del aviso</p>
-            <% } else if (pantalla==="resumen" ){ %>
-                <h1>Resumen</h1>
-                <p>Resumen de los casos</p>
-                <% } %>
+        <% if(esAdmin) { %>
+            <a href="/cuentas">Cuentas</a>
+            <% } %>
+                <% if (pantalla==="avisos" ){ %>
+                    <h1>Enviar aviso</h1>
+                    <p>Aquí irá el formulario del aviso</p>
+                    <% } else if (pantalla==="resumen" ){ %>
+                        <h1>Resumen</h1>
+                        <p>Resumen de los casos</p>
+                        <% } %>
 
-                    <form action="/cerrar-sesion" method="post">
-                        <input type="hidden" name="_csrf" value="<%= csrf %>">
-                        <button type="submit">Cerrar sesión</button>
-                    </form>
+                            <form action="/cerrar-sesion" method="post">
+                                <input type="hidden" name="_csrf" value="<%= csrf %>">
+                                <button type="submit">Cerrar sesión</button>
+                            </form>
     </main>
 </body>
 

@@ -1,0 +1,53 @@
+* {
+    box-sizing: border-box;
+}
+
+.cuentas {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.cuentas form {
+    display: grid;
+    gap: 0.5rem;
+    max-width: 24rem;
+}
+
+.cuentas input,
+.cuentas select,
+.cuentas button {
+    min-height: 44px;
+    font: inherit;
+}
+
+.cuentas fieldset label {
+    display: block;
+    min-height: 44px;
+}
+
+.aviso {
+    padding: 0.75rem;
+    border: 2px solid #1b5e20;
+    font-weight: bold;
+}
+
+.error {
+    margin: 0;
+    color: #b00020;
+}
+.tabla {
+    overflow-x: auto;
+}
+
+.tabla table {
+    border-collapse: collapse;
+    min-width: 40rem;
+}
+
+.tabla th,
+.tabla td {
+    padding: 0.5rem;
+    border-bottom: 1px solid #ccc;
+    text-align: left;
+}

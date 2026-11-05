@@ -63,3 +63,12 @@ test("base · textos en la pagina de error", () => {
 test("RNF-09 · el aviso de inactividad", () => {
     assert.equal(MENSAJES.inactividad, "Su sesión se cerró después de 15 minutos sin uso. Vuelva a entrar.");
 });
+
+test("CB-20 · un correo de 254 caracteres se acepta; uno de 255, No", () => {
+    const dominio = "@prueba.test";
+    const de254 = "a".repeat(254 - dominio.length) + dominio;
+    const de255 = "a" + de254;
+    assert.equal(de254.length, 254);
+    assert.equal(revisarFormulario(de254, "clave-de-prueba"), null);
+    assert.equal(revisarFormulario(de255, "clave-de-prueba"), "Correo o contraseña incorrectos.");
+});

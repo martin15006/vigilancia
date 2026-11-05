@@ -22,6 +22,8 @@ create table public.cuentas(
   perfil_id bigint not null references public.perfiles (id),
   es_admin boolean not null default false,
   activa boolean not null default true,
+  correo text not null,
+  debe_cambiar boolean not null default false,
   creado_en timestamptz not null default now()
 );
 
@@ -37,3 +39,5 @@ on public.cuentas for select to authenticated
 using (id=(select auth.uid()));
 
 grant select on public.perfiles, public.cuentas to authenticated;
+
+create unique index cuentas_correo_unico on public.cuentas (lower(correo));
