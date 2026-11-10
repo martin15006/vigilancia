@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar cuenta · Vigilancia ISO</title>
+    <link rel="stylesheet" href="/cuentas.css">
+    <script src="/sesion.js" defer> </script>
+</head>
+
+<body>
+    <main class="cuentas">
+        <a href="/cuentas">Volver a cuentas</a>
+        <h1>Editar cuenta</h1>
+
+        <% if(aviso){ %>
+        <p class="aviso" role="status"><%= aviso %></p>
+        <% } %>
+        <% if(errores.general){%>
+        <p class="error" role="alert"><%= errores.general %></p>
+        <% } %>
+
+        <section>
+            <form method="post" action="/cuentas/<%= cuenta.id %>">
+                <input type="hidden" name="_csrf" value="<%= csrf %>">
+
+                <p>Correo: <strong> <%= cuenta.correo %> </strong> (no se puede cambiar)</p>
+
+                <label for="nombre">Nombre</label>
+                <input id="nombre" name="nombre" value="<%= valores.nombre %>" required>
+                <% if (errores.nombre) { %> <p class="error"><%= errores.nombre %></p> <% } %>
+
+                <label for="perfil">Perfil</label>
+                <select id="perfil" name="perfil" required>
+                    <option value="">Elija un perfil</option>
+                    <% perfiles.forEach((perfil)=>{ %>
+                    <option value="<%= perfil.id %>" <% if (String(perfil.id)=== valores.perfil) { %> selected <%} %>>
+                        <%= perfil.nombre %></option>
+                    <% }) %>
+                </select>
+
+                <% if (errores.perfil) { %> <p class="error"><%= errores.perfil %></p><% } %>
+
+                <fieldset>
+                    <legend>Tipo de acceso</legend>
+                    <label><input type="radio" name="acceso" value="usuario"
+                            <% if (valores.acceso !== "administrador") {%> checked <% } %>> Usuario </label>
+                    <label><input type="radio" name="acceso" value="administrador" <% if (valores.acceso === "administrador") 
+                            {%> checked<% } %>>Administrador</label>
+                </fieldset>
+                <% if (errores.acceso) { %> <p class="error"><%= errores.acceso %></p><% } %>
+
+                <button type="submit">Guardar cambios</button>
+            </form>
+        </section>
+        <section>
+            <h2>Estado</h2>
+            <p>Esta cuenta está <strong><%= cuenta.activa ? "activa" : "desactivada" %></strong>.</p>
+            <form method="post" action="/cuentas/<%= cuenta.id %>/activa">
+                <input type="hidden" name="_csrf" value="<%= csrf %>">
+                <input type="hidden" name="activa" value="<%= cuenta.activa ? 'false' : 'true' %>">
+                <button type="submit"><%=cuenta.activa ? "Desactivar cuenta" : "Activar cuenta" %></button>
+            </form>
+            <%if (errores.estado){%><p class="error"><%= errores.estado %></p><% } %>
+        </section>
+
+        <section>
+            <h2>Contraseña</h2>
+            <form method="post" action="/cuentas/<%= cuenta.id %>/restablecer">
+                <input type="hidden" name="_csrf" value="<%= csrf %>">
+                <button type="submit">Restablecer contraseña</button>
+            </form>
+        </section>
+    </main>
+
+
+</body>
+
+</html>

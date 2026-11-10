@@ -41,3 +41,16 @@ using (id=(select auth.uid()));
 grant select on public.perfiles, public.cuentas to authenticated;
 
 create unique index cuentas_correo_unico on public.cuentas (lower(correo));
+
+-- al desactivar una cuenta o restablecer una contraseña se cierran todas las sesiones
+create or replace function public.cerrar_sesiones(p_usuario uuid)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$ 
+  delete from auth.sessions where user_id = p_usuario;
+  $$;
+
+revoke execute on function public.cerrar_sesiones(uuid) from public, anon, authenticated;
+grant execute on function public.cerrar_sesiones(uuid) to service_role;

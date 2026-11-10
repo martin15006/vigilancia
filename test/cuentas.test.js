@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
     requiereAdmin, revisarDatosCuenta, generarClaveTemporal, revisarUltimoAdmin,
-    revisarAutodesactivar, mensajeAlCrear, textoCuentaCreada, textoClaveRestablecida, valoresDelFormulario
+    revisarAutodesactivar, mensajeAlCrear, textoCuentaCreada, textoClaveRestablecida, valoresDelFormulario,
+    valoresDeCuenta, avisoDeCuenta, leerActiva,
 } = require("../lib/cuentas");
 
 
@@ -152,4 +153,30 @@ test("base · CL-07 · el formulario se vuelve a llenar solo con sus 4 campos y 
     assert.deepEqual(valoresDelFormulario(undefined), {
         nombre: "", correo: "", perfil: "", acceso: ""
     });
+});
+
+test("HU-02.4 · al editar, el formulario arranca con lo guardado de la cuenta", () => {
+    const cuenta = {
+        id: "a", nombre: "valen", correo: "valen@prueba.test", perfil_id: 1,
+        es_admin: false, activa: true, debe_cambiar: false
+    };
+    assert.deepEqual(valoresDeCuenta(cuenta), { nombre: "valen", correo: "valen@prueba.test", perfil: "1", acceso: "usuario" });
+    assert.equal(valoresDeCuenta({ ...cuenta, es_admin: true }).acceso, "administrador");
+});
+
+test("HU-02.3 y HU-02.7 · activar o desactivar solo la carpeta", () => {
+    assert.equal(leerActiva({ activa: "true" }), true);
+    assert.equal(leerActiva({ activa: "false" }), false);
+    for (const cuerpo of [{ activa: "si" }, { activa: ["false"] }, { activa: true }, {}, undefined]) {
+        assert.equal(leerActiva(cuerpo), null);
+    }
+});
+
+test("HU-02 · los archivos que llegan por la dirección solo dan textos fijos", () => {
+    assert.equal(avisoDeCuenta("guardado"), "Cambios guardados.");
+    assert.equal(avisoDeCuenta("activada"), "Cuenta activada.");
+    assert.equal(avisoDeCuenta("desactivada"), "Cuenta desactivada.");
+    for (const clave of ["<script>", "constructor", "__proto__", "toString", ["guardado"], undefined]) {
+        assert.equal(avisoDeCuenta(clave), null);
+    }
 });

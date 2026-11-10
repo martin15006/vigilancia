@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { revisarFormulario, mensajeAlEntrar, revisarCuenta, sinCache, pantallaDeInicio, MENSAJES } = require("../lib/acceso");
+const { revisarFormulario, mensajeAlEntrar, revisarCuenta, sinCache, pantallaDeInicio, MENSAJES, revisarPrimerIngreso } = require("../lib/acceso");
 
 test("HU-01.1 · El jefe entra a enviar aviso", () => {
     assert.equal(pantallaDeInicio({ enviar_avisos: true, ver_casos: false }),
@@ -71,4 +71,28 @@ test("CB-20 · un correo de 254 caracteres se acepta; uno de 255, No", () => {
     assert.equal(de254.length, 254);
     assert.equal(revisarFormulario(de254, "clave-de-prueba"), null);
     assert.equal(revisarFormulario(de255, "clave-de-prueba"), "Correo o contraseña incorrectos.");
+});
+
+test("HU-02.1 · con la contraseña temporal, cualquier página lleva a cambiarla", () => {
+    assert.equal(revisarPrimerIngreso({ debe_cambiar: true }, false), "/cambiar-contrasena");
+});
+
+test("HU-02.1 · con la contraseña temporal, la pantalla para cambiar sí se abre", () => {
+    assert.equal(revisarPrimerIngreso({ debe_cambiar: true }, true), null);
+});
+
+test("HU-02.1 · sin la contraseña temporal, las páginas se abren normal y la de cambiarla lleva a inicio", () => {
+    assert.equal(revisarPrimerIngreso({ debe_cambiar: false }, false), null);
+    assert.equal(revisarPrimerIngreso({ debe_cambiar: false }, true), "/inicio");
+});
+
+test("HU-02.1 · si el dato no llega o viene raro, se trata como contraseña temporal", () => {
+    assert.equal(revisarPrimerIngreso({}, false), "/cambiar-contrasena");
+    assert.equal(revisarPrimerIngreso({ debe_cambiar: null }, false), "/cambiar-contrasena");
+    assert.equal(revisarPrimerIngreso({ debe_cambiar: "false" }, false), "/cambiar-contrasena");
+    assert.equal(revisarPrimerIngreso(null, false), "/cambiar-contrasena");
+});
+
+test("HU-02.1 · el aviso de la contraseña temporal", () => {
+    assert.equal(MENSAJES.claveTemporal, "Por seguridad, cambie su contraseña temporal antes de continuar.");
 });

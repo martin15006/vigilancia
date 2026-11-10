@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cambiar contraseña · Vigilancia ISO</title>
+    <link rel="stylesheet" href="/login.css">
+    <script src="/sesion.js" defer></script>
+</head>
+
+<body>
+    <main class="entrada">
+        <h1>Cambiar contraseña</h1>
+        <p role="status"><%=mensaje%></p>
+        <%if(errores.general){ %>
+        <p class="mensaje-error" role="alert"><%= errores.general %></p>
+        <% } %>
+
+        <form method="post" action="/cambiar-contrasena">
+            <input type="hidden" name="_csrf" value="<%=csrf%>">
+
+            <label for="nueva">Nueva contraseña</label>
+            <input id="nueva" name="nueva" type="password" autocomplete="new-password" required>
+            <%if(errores.nueva){%> <p class="mensaje-error"><%= errores.nueva %></p>
+            <% } %>
+            <label for="repetida">Repita la nueva contraseña</label>
+            <input id="repetida" name="repetida" type="password" autocomplete="new-password" required>
+            <% if(errores.repetida) { %> <p class="mensaje-error"><%= errores.repetida%></p><% } %>
+
+            <button type="submit">Cambiar contraseña</button>
+        </form>
+        <form method="post" action="/cerrar-sesion">
+            <input type="hidden" name="_csrf" value="<%= csrf %>">
+            <button type="submit">Cerrar sesión</button>
+        </form>
+    </main>
+</body>
+
+</html>

@@ -2,14 +2,15 @@ const express = require("express");
 
 const path = require("path");
 const { clienteAdmin, clientePorPeticion } = require("./lib/supabase");
-const { revisarFormulario, mensajeAlEntrar, revisarCuenta, MENSAJES, pantallaDeInicio, sinCache } = require("./lib/acceso");
+const { revisarFormulario, mensajeAlEntrar, revisarCuenta, MENSAJES, pantallaDeInicio, sinCache, revisarPrimerIngreso } = require("./lib/acceso");
 const { crearRegistro, estaFrenado, anotarExito, empezarIntento, terminarIntento } = require("./lib/intentos");
 const intentos = crearRegistro();
 const { cabecerasSeguras } = require("./lib/seguridad");
 const { parseCookieHeader, serializeCookieHeader } = require("@supabase/ssr");
 const { crearToken, leerToken, tokenValido } = require("./lib/csrf");
 const { crearMarca, sigueActiva } = require("./lib/inactividad");
-const { requiereAdmin, revisarDatosCuenta, generarClaveTemporal, mensajeAlCrear, textoCuentaCreada, valoresDelFormulario } = require("./lib/cuentas");
+const { requiereAdmin, revisarDatosCuenta, generarClaveTemporal, mensajeAlCrear, textoCuentaCreada, valoresDelFormulario, valoresDeCuenta, revisarUltimoAdmin, revisarAutodesactivar, textoClaveRestablecida, leerActiva, avisoDeCuenta } = require("./lib/cuentas");
+
 
 const CLAVE_FIRMA = process.env.CLAVE_FIRMA;
 if (!CLAVE_FIRMA || CLAVE_FIRMA.length < 32) {
@@ -87,7 +88,7 @@ async function requiereSesion(req, res, next) {
 
     const { data: cuenta, error: errorCuenta } = await supabase
         .from("cuentas")
-        .select("nombre, activa, es_admin, perfiles (enviar_avisos, ver_casos)")
+        .select("id, nombre, activa, es_admin, debe_cambiar, perfiles (enviar_avisos, ver_casos)")
         .eq("id", data.user.id)
         .maybeSingle();
     if (errorCuenta) {
@@ -101,8 +102,19 @@ async function requiereSesion(req, res, next) {
         return res.redirect(303, "/login")
     }
 
+    // con la contraseña temporal solo se puede estar en cambiar contraseña 
+    const destino = revisarPrimerIngreso(cuenta, req.paraCambiarClave === true);
+    if (destino) return res.redirect(303, destino);
+
     ponerMarca(res);
     req.cuenta = cuenta;
+    next();
+}
+
+// las rutas de "cambiar contraseña" se marca antes de requiereSesion 
+// sin esta marca, quien tiene la contraseña temporal es llevado a cambiarla 
+function paraCambiarClave(req, res,next){
+    req.paraCambiarClave = true;
     next();
 }
 
@@ -124,6 +136,10 @@ app.get("/salud", async (req, res) => {
 app.get("/login", (req, res) => {
     const mensaje = req.query.motivo === "inactividad" ? MENSAJES.inactividad : null;
     res.render("login", { mensaje, correo: "" })
+});
+
+app.get("/cambiar-contrasena", paraCambiarClave, requiereSesion,(req,res)=>{
+    res.render("cambiar-contrasena",{mensaje:MENSAJES.claveTemporal, errores:{}});
 });
 
 app.get("/", (req, res) => res.redirect(303, "/inicio"));
@@ -235,6 +251,98 @@ app.post("/cuentas", requiereSesion, requiereAdmin, async (req, res) => {
     res.status(201).render("cuentas", {
         ...(await leerCuentas()), errores: {}, valores: valoresDelFormulario(), aviso: textoCuentaCreada(clave),
     });
+});
+
+async function leerParaEditar(id) {
+    const admin = clienteAdmin();
+    const [perfiles, cuentas] = await Promise.all([
+        admin.from("perfiles").select("id, nombre").order("id"),
+        admin.from("cuentas").select("id, nombre, correo, perfil_id, es_admin, activa"),
+    ]);
+    const error = perfiles.error ?? cuentas.error;
+    if (error) throw new Error(`No se pude leer la cuenta: ${error.message}`);
+    return { perfiles: perfiles.data, cuentas: cuentas.data, cuenta: cuentas.data.find((cuenta) => cuenta.id === id) };
+}
+
+function mostrarCuenta(res, estado, { cuenta, perfiles, errores, valores, aviso }) {
+    res.status(estado).render("cuenta", {
+        cuenta: { id: cuenta.id, correo: cuenta.correo, activa: cuenta.activa },
+        perfiles, errores: errores ?? {}, valores: valores ?? valoresDeCuenta(cuenta), aviso: aviso ?? null,
+    });
+}
+
+app.get("/cuentas/:id", requiereSesion, requiereAdmin, async (req, res) => {
+    const { perfiles, cuentas, cuenta } = await leerParaEditar(req.params.id);
+    if (!cuenta) return res.status(404).render("error", { mensaje: MENSAJES.noEncontrada });
+    mostrarCuenta(res, 200, { cuenta, perfiles, aviso: avisoDeCuenta(req.query.aviso) });
+});
+
+app.post("/cuentas/:id", requiereSesion, requiereAdmin, async (req, res) => {
+    const { perfiles, cuentas, cuenta } = await leerParaEditar(req.params.id);
+    if (!cuenta) return res.status(404).render("error", { mensaje: MENSAJES.noEncontrada });
+    const volver = (estado, errores) => mostrarCuenta(res, estado, { cuenta, perfiles, errores, valores: valoresDelFormulario(req.body) });
+
+    const { errores, datos } = revisarDatosCuenta(req.body, perfiles.map((perfil) => perfil.id), { conCorreo: false });
+    if (Object.keys(errores).length > 0) return volver(400, errores);
+
+    const ultimo = revisarUltimoAdmin(cuentas, cuenta.id, { es_admin: datos.es_admin });
+    if (ultimo) return volver(409, { acceso: ultimo });
+
+    const { error } = await clienteAdmin().from("cuentas").update(datos).eq("id", cuenta.id);
+    if (error) {
+        console.error("No se pudo guardar la cuenta:", error.code, error.message);
+        return volver(503, { general: MENSAJES.inesperado });
+    }
+
+    if (cuenta.id === req.cuenta.id && !datos.es_admin) return res.redirect(303, "/inicio");
+    res.redirect(303, `/cuentas/${cuenta.id}?aviso=guardado`);
+});
+
+app.post("/cuentas/:id/activa", requiereSesion, requiereAdmin, async (req, res) => {
+    const { perfiles, cuentas, cuenta } = await leerParaEditar(req.params.id);
+    if (!cuenta) return res.status(404).render("error", { mensaje: MENSAJES.noEncontrada });
+    const volver = (estado, errores) => mostrarCuenta(res, estado, { cuenta, perfiles, errores });
+
+    const activa = leerActiva(req.body);
+    if (activa === null) return volver(400, { general: MENSAJES.inesperado });
+
+    const bloqueo = revisarAutodesactivar(req.cuenta.id, cuenta.id, activa) ?? revisarUltimoAdmin(cuentas, cuenta.id, { activa });
+    if (bloqueo) return volver(409, { estado: bloqueo });
+
+    const admin = clienteAdmin();
+    const { error } = await admin.from("cuentas").update({ activa }).eq("id", cuenta.id);
+    if (error) {
+        console.error("No se pudo cambiar el estado de la cuenta:", error.code, error.message);
+        return volver(503, { general: MENSAJES.inesperado });
+    }
+    if (!activa) {
+        const { error: errorSesiones } = await admin.rpc("cerrar_sesiones", { p_usuario: cuenta.id });
+        if (errorSesiones) {
+            console.error("No se pudieron cerrar las sesiones:", errorSesiones.code, errorSesiones.message);
+            return volver(503, { general: MENSAJES.inesperado });
+        }
+    }
+    res.redirect(303, `/cuentas/${cuenta.id}?aviso=${activa ? "activada" : "desactivada"}`);
+});
+
+app.post("/cuentas/:id/restablecer", requiereSesion, requiereAdmin, async (req, res) => {
+    const { perfiles, cuenta } = await leerParaEditar(req.params.id);
+    if (!cuenta) return res.status(404).render("error", { mensaje: MENSAJES.noEncontrada });
+    const fallo = (error) => {
+        console.error("No se pudo restablecer la contraseña:", error.code, error.message);
+        return mostrarCuenta(res, 503, { cuenta, perfiles, errores: { general: MENSAJES.inesperado } });
+    };
+
+    const clave = generarClaveTemporal();
+    const admin = clienteAdmin();
+    const paso1 = await admin.auth.admin.updateUserById(cuenta.id, { password: clave });
+    if (paso1.error) return fallo(paso1.error);
+    const paso2 = await admin.from("cuentas").update({ debe_cambiar: true }).eq("id", cuenta.id);
+    if (paso2.error) return fallo(paso2.error);
+    const paso3 = await admin.rpc("cerrar_sesiones", { p_usuario: cuenta.id });
+    if (paso3.error) return fallo(paso3.error);
+
+    mostrarCuenta(res, 200, { cuenta, perfiles, aviso: textoClaveRestablecida(clave) });
 });
 
 app.use((req, res) => {
