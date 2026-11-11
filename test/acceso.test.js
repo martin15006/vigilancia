@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { revisarFormulario, mensajeAlEntrar, revisarCuenta, sinCache, pantallaDeInicio, MENSAJES, revisarPrimerIngreso } = require("../lib/acceso");
+const { revisarFormulario, mensajeAlEntrar, revisarCuenta, sinCache, pantallaDeInicio, MENSAJES, revisarPrimerIngreso, revisarClaveNueva, mensajeAlCambiarClave, avisoDeInicio } = require("../lib/acceso");
 
 test("HU-01.1 · El jefe entra a enviar aviso", () => {
     assert.equal(pantallaDeInicio({ enviar_avisos: true, ver_casos: false }),
@@ -95,4 +95,56 @@ test("HU-02.1 · si el dato no llega o viene raro, se trata como contraseña tem
 
 test("HU-02.1 · el aviso de la contraseña temporal", () => {
     assert.equal(MENSAJES.claveTemporal, "Por seguridad, cambie su contraseña temporal antes de continuar.");
+});
+
+const iguales = (clave) => ({ nueva: clave, repetida: clave });
+
+test("RNF-04 · 7 caracteres no alcanzan; 8 sí", () => {
+    assert.deepEqual(revisarClaveNueva(iguales("abcdefg")).errores, { nueva: "La contraseña debe tener al menos 8 caracteres." });
+    assert.deepEqual(revisarClaveNueva(iguales("abcdefgh")), { errores: {}, clave: "abcdefgh" });
+});
+
+test("RNF-04 · el mínimo cuenta caracteres reales: 4 emojis no son 8 caracteres", () => {
+    assert.equal("😀".repeat(4).length, 8);
+    assert.deepEqual(revisarClaveNueva(iguales("😀".repeat(4))).errores, { nueva: "La contraseña debe tener al menos 8 caracteres." });
+    assert.deepEqual(revisarClaveNueva(iguales("😀".repeat(8))).errores, {});
+});
+
+test("D40 · 72 bytes se aceptan; 73, no", () => {
+    assert.deepEqual(revisarClaveNueva(iguales("a".repeat(72))).errores, {});
+    assert.deepEqual(revisarClaveNueva(iguales("a".repeat(73))).errores, { nueva: "La contraseña puede tener como máximo 72 caracteres." });
+});
+
+test("D40 · una ñ ocupa 2 bytes: 36 ñ se aceptan; 37, no", () => {
+    assert.deepEqual(revisarClaveNueva(iguales("ñ".repeat(36))).errores, {});
+    assert.deepEqual(revisarClaveNueva(iguales("ñ".repeat(37))).errores, { nueva: "La contraseña puede tener como máximo 72 caracteres." });
+});
+
+test("HU-02.1 · las 2 contraseñas tienen que ser iguales, sin recortar espacios", () => {
+    assert.deepEqual(revisarClaveNueva({ nueva: "clave-de-prueba", repetida: "clave-de-pruebA" }).errores, { repetida: "Las contraseñas no coinciden." });
+    assert.deepEqual(revisarClaveNueva({ nueva: "clave-de-prueba", repetida: "clave-de-prueba " }).errores, { repetida: "Las contraseñas no coinciden." });
+    assert.deepEqual(revisarClaveNueva({ nueva: " clave-de-prueba", repetida: " clave-de-prueba" }), { errores: {}, clave: " clave-de-prueba" });
+});
+
+test("HU-02.1 · campos que faltan o llegan repetidos no pasan", () => {
+    assert.deepEqual(revisarClaveNueva({}).errores, { nueva: "La contraseña debe tener al menos 8 caracteres." });
+    assert.deepEqual(revisarClaveNueva(undefined).errores, { nueva: "La contraseña debe tener al menos 8 caracteres." });
+    assert.deepEqual(revisarClaveNueva({ nueva: ["clave-de-prueba", "otra-clave-x"], repetida: "clave-de-prueba" }).errores, { nueva: "La contraseña debe tener al menos 8 caracteres." });
+    assert.deepEqual(revisarClaveNueva({ nueva: "clave-de-prueba", repetida: ["clave-de-prueba"] }).errores, { repetida: "Las contraseñas no coinciden." });
+    assert.deepEqual(revisarClaveNueva({ nueva: "clave-de-prueba", }).errores, { repetida: "Las contraseñas no coinciden." });
+});
+
+test("HU-02.1 · si supabase dice que es igual a la guardada, se pide otra", () => {
+    assert.deepEqual(mensajeAlCambiarClave({ code: "same_password" }), { nueva: "La nueva contraseña debe ser distinta de la temporal." });
+    assert.deepEqual(mensajeAlCambiarClave({ code: "weak_password" }), { general: "Ocurrió un error inesperado. Intente de nuevo en un momento." });
+    assert.deepEqual(mensajeAlCambiarClave({ code: "session_not_found" }), { general: "Ocurrió un error inesperado. Intente de nuevo en un momento." });
+});
+
+test("D41 · inicio solo muestra el aviso de la contraseña cambiada", () => {
+    assert.equal(avisoDeInicio("clave-cambiada"), "Contraseña cambiada.");
+    assert.equal(avisoDeInicio("<script>"), null);
+    assert.equal(avisoDeInicio("constructor"), null);
+    assert.equal(avisoDeInicio("__proto__"), null);
+    assert.equal(avisoDeInicio(["clave-cambiada"]), null);
+    assert.equal(avisoDeInicio(undefined), null);
 });

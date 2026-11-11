@@ -2,7 +2,10 @@ const express = require("express");
 
 const path = require("path");
 const { clienteAdmin, clientePorPeticion } = require("./lib/supabase");
-const { revisarFormulario, mensajeAlEntrar, revisarCuenta, MENSAJES, pantallaDeInicio, sinCache, revisarPrimerIngreso } = require("./lib/acceso");
+const {
+    revisarFormulario, mensajeAlEntrar, revisarCuenta, MENSAJES, pantallaDeInicio, sinCache,
+    revisarPrimerIngreso, revisarClaveNueva, mensajeAlCambiarClave, avisoDeInicio,
+} = require("./lib/acceso");
 const { crearRegistro, estaFrenado, anotarExito, empezarIntento, terminarIntento } = require("./lib/intentos");
 const intentos = crearRegistro();
 const { cabecerasSeguras } = require("./lib/seguridad");
@@ -108,12 +111,13 @@ async function requiereSesion(req, res, next) {
 
     ponerMarca(res);
     req.cuenta = cuenta;
+    req.supabase = supabase;
     next();
 }
 
 // las rutas de "cambiar contraseña" se marca antes de requiereSesion 
 // sin esta marca, quien tiene la contraseña temporal es llevado a cambiarla 
-function paraCambiarClave(req, res,next){
+function paraCambiarClave(req, res, next) {
     req.paraCambiarClave = true;
     next();
 }
@@ -138,14 +142,42 @@ app.get("/login", (req, res) => {
     res.render("login", { mensaje, correo: "" })
 });
 
-app.get("/cambiar-contrasena", paraCambiarClave, requiereSesion,(req,res)=>{
-    res.render("cambiar-contrasena",{mensaje:MENSAJES.claveTemporal, errores:{}});
+app.get("/cambiar-contrasena", paraCambiarClave, requiereSesion, (req, res) => {
+    res.render("cambiar-contrasena", { mensaje: MENSAJES.claveTemporal, errores: {} });
+});
+
+app.post("/cambiar-contrasena", paraCambiarClave, requiereSesion, async (req, res) => {
+    const volver = (estado, errores) => res.status(estado).render("cambiar-contrasena", {
+        mensaje: MENSAJES.claveTemporal, errores
+    });
+
+    const { errores, clave } = revisarClaveNueva(req.body);
+    if (Object.keys(errores).length > 0) return volver(400, errores);
+
+    // supabase cierra las sesiones y deja la que el usuario usa para cambiar la contraseña 
+    const { error } = await req.supabase.auth.updateUser({ password: clave });
+    if (error) {
+        if (error.code !== "same_password") console.error("No se pudo cambiar la contraseña:", error.code, error.message);
+        return volver(error.code === "same_password" ? 400 : 503, mensajeAlCambiarClave(error));
+    }
+
+    const { error: errorMarca } = await clienteAdmin().from("cuentas").update({
+        debe_cambiar: false
+    }).eq("id", req.cuenta.id);
+    if (errorMarca) {
+        console.error("No se pudo apagar debe_cambiar:", errorMarca.code, errorMarca.message);
+        return volver(503, { general: MENSAJES.inesperado });
+    }
+    res.redirect(303, "/inicio?aviso=clave-cambiada");
 });
 
 app.get("/", (req, res) => res.redirect(303, "/inicio"));
 
 app.get("/inicio", requiereSesion, (req, res) => {
-    res.render("inicio", { nombre: req.cuenta.nombre, pantalla: pantallaDeInicio(req.cuenta.perfiles), esAdmin: req.cuenta.es_admin === true });
+    res.render("inicio", {
+        nombre: req.cuenta.nombre, pantalla: pantallaDeInicio(req.cuenta.perfiles), esAdmin: req.cuenta.es_admin === true,
+        aviso: avisoDeInicio(req.query.aviso)
+    });
 });
 
 app.post("/login", async (req, res) => {
