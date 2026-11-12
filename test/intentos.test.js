@@ -117,7 +117,8 @@ test("CB-20 · con espacio justo para sus dos filas, todavía puede empezar", ()
 test("CB-20 · con la libreta llena, quien ya estaba anotado sigue pudiento intentar", () => {
     const registro = crearRegistro();
     empezarIntento(registro, EQUIPO, CORREO, 0);
-    terminarIntento(registro, EQUIPO, CORREO, 0), true;
+    terminarIntento(registro, EQUIPO, CORREO, 0, true);
+    assert.equal(registro.get(`correo:${EQUIPO}|${CORREO}`).fallos, 1);
     llenar(registro, TOPE_DURO - 2, 0);
     assert.equal(empezarIntento(registro, EQUIPO, CORREO, 0), true);
 });

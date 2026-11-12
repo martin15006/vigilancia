@@ -45,14 +45,22 @@ async function main() {
     const { error: errorCuenta } = await supabase.from("cuentas").insert({
         id: creado.user.id,
         nombre: datos.nombre,
+        correo: datos.correo,
         perfil_id: filaPerfil.id,
         es_admin: datos.esAdmin,
         activa: datos.activa,
+        debe_cambiar: true,
     });
     if (errorCuenta) {
         await supabase.auth.admin.deleteUser(creado.user.id);
         throw new Error(`No se guardó la cuenta, se ha eliminado la cuenta: ${errorCuenta.message}`);
     }
+
+    const { error: errorEvento } = await supabase.from("eventos").insert({
+        accion: "crear", cuenta: creado.user.id, detalle: { origen: "script" },
+    });
+    if (errorEvento) console.error("La cuenta se creó, pero no quedó en el registro:", errorEvento.code, errorEvento.message);
+
 
     console.log(`Cuenta creada: ${datos.nombre} · ${datos.perfil} · ${datos.esAdmin ? "Administrador" : "Usuario"} · ${datos.activa ? "activa" : "desactivada"}`);
 }
