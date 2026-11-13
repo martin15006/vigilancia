@@ -29,7 +29,8 @@ create table public.cuentas(
   clave_temporal_hasta timestamptz default (now() + interval '72 hours'),
   -- HU-02.4: cada cambio sube la versión, para notar si otra persona cambió la cuenta.
   version integer not null default 1,
-  creado_en timestamptz not null default now()
+  creado_en timestamptz not null default now(),
+  constraint cuentas_nombre_largo check (char_length(nombre)between 1 and 100)
 );
 
 create or replace function public.subir_version()
@@ -131,3 +132,148 @@ for each row execute function public.eventos_no_se_cambian();
 create trigger eventos_sin_vaciar
 before truncate on public.eventos
 for each statement execute function public.eventos_no_se_cambian();
+
+create or replace function public.editar_cuenta (
+  p_quien uuid,
+  p_id uuid,
+  p_nombre text,
+  p_perfil_id bigint,
+  p_es_admin boolean,
+  p_version integer
+) returns text language plpgsql security definer
+set
+  search_path = '' as $$
+declare 
+  antes public.cuentas%rowtype;
+begin
+
+perform pg_advisory_xact_lock(hashtext('vigilancia_iso.cuentas'));
+
+if not exists (select 1 from public.cuentas
+  where id= p_quien and es_admin and activa and not debe_cambiar) then return 'sin_permiso';
+end if;
+
+select * into antes from public.cuentas where id=p_id for update;
+if not found then
+  return 'no_existe';
+end if;
+
+if p_version is null or antes.version <> p_version then return 'conflicto';
+end if;
+
+if antes.es_admin and antes.activa and not p_es_admin and not exists (
+  select 1 from public.cuentas where id <> p_id and es_admin and activa
+) then return 'ultimo_admin';
+end if;
+
+update public.cuentas
+set nombre = p_nombre, perfil_id = p_perfil_id, es_admin = p_es_admin where id= p_id;
+
+insert into public.eventos (quien, accion, cuenta, detalle)
+values (p_quien,'editar', p_id, jsonb_build_object(
+  'antes',jsonb_build_object('nombre', antes.nombre, 'perfil_id', antes.perfil_id, 'es_admin', antes.es_admin),
+  'despues', jsonb_build_object('nombre',p_nombre,'perfil_id',p_perfil_id,'es_admin', p_es_admin)
+));
+return 'ok';
+end;
+$$;
+
+create or replace function public.cambiar_activa (p_quien uuid, p_id uuid, p_activa boolean) returns text language plpgsql security definer
+set
+  search_path = '' as $$
+declare
+  antes public.cuentas%rowtype;
+begin
+  perform pg_advisory_xact_lock(hashtext('vigilancia_iso.cuentas'));
+
+  if not exists(select 1 from public.cuentas
+  where id= p_quien and es_admin and activa and not debe_cambiar
+  ) then return 'sin_permiso';
+  end if;
+
+  if p_activa is null then
+  return 'invalido';
+  end if;
+
+  select * into antes from public.cuentas where id = p_id for update;
+  if not found then 
+    return 'no_existe';
+  end if;
+
+  if not p_activa and p_id = p_quien then
+    return 'propia';
+  end if;
+
+  if not p_activa and antes.es_admin and antes.activa and not exists (
+    select 1 from public.cuentas where id <> p_id and es_admin and activa 
+  ) then return 'ultimo_admin';
+  end if;
+
+  update public.cuentas set activa = p_activa where id = p_id;
+
+  if not p_activa then
+    delete from auth.sessions where user_id = p_id;
+  end if;
+
+  insert into public.eventos (quien,accion,cuenta)
+  values (p_quien, case when p_activa then 'activar' else 'desactivar' end, p_id);
+  return 'ok';
+end;
+$$;
+
+create or replace function public.preparar_restablecer (p_quien uuid, p_id uuid) returns text language plpgsql security definer
+set
+  search_path = '' as $$
+begin
+  perform pg_advisory_xact_lock(hashtext('vigilancia_iso.cuentas'));
+
+  if not exists (select 1 from public.cuentas
+  where id=p_quien and es_admin and activa and not debe_cambiar) then
+    return 'sin_permiso';
+  end if;
+
+  update public.cuentas
+  set debe_cambiar = true, clave_temporal_hasta = now() + interval '72 hours'
+  where id = p_id;
+  if not found then
+    return 'no_existe';
+  end if;
+
+  delete from auth.sessions where user_id = p_id;
+
+  insert into public.eventos (quien,accion,cuenta)
+  values (p_quien,'restablecer',p_id);
+
+  return 'ok';
+end;
+$$;
+
+revoke
+execute on function public.editar_cuenta (uuid, uuid, text, bigint, boolean, integer)
+from
+  public,
+  anon,
+  authenticated;
+
+grant
+execute on function public.editar_cuenta (uuid, uuid, text, bigint, boolean, integer) to service_role;
+
+revoke
+execute on function public.cambiar_activa (uuid, uuid, boolean)
+from
+  public,
+  anon,
+  authenticated;
+
+grant
+execute on function public.cambiar_activa (uuid, uuid, boolean) to service_role;
+
+revoke
+execute on function public.preparar_restablecer (uuid, uuid)
+from
+  public,
+  anon,
+  authenticated;
+
+grant
+execute on function public.preparar_restablecer (uuid, uuid) to service_role;
